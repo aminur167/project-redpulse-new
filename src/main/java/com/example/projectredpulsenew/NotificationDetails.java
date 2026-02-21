@@ -9,17 +9,20 @@ public class NotificationDetails {
     private String clickerEmail;
     private String clickerPassword;
     private String clickerProfilePic;
-
     private String receiverEmail;
     private String receiverPassword;
-
     private String notiType;
 
-    // ✅ No-argument constructor (required for Gson)
+    // 🔴 NEW FIELD - eta add koro
+    private long timestamp;  // notification create er time store korbe
+
+    // No-argument constructor
     public NotificationDetails() {
+        // 🔴 NEW - default timestamp set koro
+        this.timestamp = System.currentTimeMillis();
     }
 
-    // Parameterized constructor (optional)
+    // Parameterized constructor (update koro)
     public NotificationDetails(String clickerName, String clickerBloodgroup, String clickerDistrict, String clickerNumber,
                                String clickerEmail, String clickerPassword, String clickerProfilePic,
                                String receiverEmail, String receiverPassword,
@@ -34,6 +37,9 @@ public class NotificationDetails {
         this.receiverEmail = receiverEmail;
         this.receiverPassword = receiverPassword;
         this.notiType = notiType;
+
+        // 🔴 NEW
+        this.timestamp = System.currentTimeMillis();
     }
 
     // =================== Getters ===================
@@ -48,7 +54,11 @@ public class NotificationDetails {
     public String getReceiverPassword() { return receiverPassword; }
     public String getNotiType() { return notiType; }
 
-    // =================== Setters =================== (optional)
+    // 🔴 NEW Getter/Setter for timestamp
+    public long getTimestamp() { return timestamp; }
+    public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+
+    // =================== Setters ===================
     public void setClickerName(String clickerName) { this.clickerName = clickerName; }
     public void setClickerBloodgroup(String clickerBloodgroup) { this.clickerBloodgroup = clickerBloodgroup; }
     public void setClickerDistrict(String clickerDistrict) { this.clickerDistrict = clickerDistrict; }

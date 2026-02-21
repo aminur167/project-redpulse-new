@@ -54,7 +54,10 @@ public class CreatePost_Controller implements Initializable {
     @FXML private Button submitBtn;
     @FXML private ComboBox<String> districtField;
 
-    private final String filePath = System.getProperty("user.dir") + File.separator + "D:\\project-redpulse-new\\src\\main\\resources\\com\\example\\projectredpulsenew\\PostDetails.json";
+    // File paths - আপনার original পাথ ব্যবহার করছি
+    private final String postFilePath = "D:\\project-redpulse-new\\src\\main\\resources\\com\\example\\projectredpulsenew\\PostDetails.json";
+    private final String userFilePath = "D:\\project-redpulse-new\\src\\main\\resources\\com\\example\\projectredpulsenew\\UserDetails.json";
+    private final String notiFilePath = "D:\\project-redpulse-new\\src\\main\\resources\\com\\example\\projectredpulsenew\\Noti.json";
 
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
@@ -125,20 +128,14 @@ public class CreatePost_Controller implements Initializable {
         stage.show();
     }
 
-    // ------------------- Save Data to JSON -------------------
+    // ------------------- Save Post to JSON -------------------
 
     private void savePostToJson(PostDetails post) {
-        // ফিক্স: রিলেটিভ পাথ ব্যবহার করা হয়েছে যেন নিউজফিডের সাথে ফাইল লোকেশন মিলে যায়
-        String filePath = "D:\\project-redpulse-new\\src\\main\\resources\\com\\example\\projectredpulsenew\\PostDetails.json";
-
-
-
         List<PostDetails> posts = new ArrayList<>();
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-
         try {
-            File file = new File(filePath);
+            File file = new File(postFilePath);
             System.out.println("Writing to file at: " + file.getAbsolutePath());
             if (file.exists() && file.length() > 0) {
                 try (Reader reader = new FileReader(file)) {
@@ -154,12 +151,98 @@ public class CreatePost_Controller implements Initializable {
 
         posts.add(post);
 
-        try (Writer writer = new FileWriter(filePath)) {
+        try (Writer writer = new FileWriter(postFilePath)) {
             gson.toJson(posts, writer);
             System.out.println("Post saved successfully for user: " + post.getUserName());
         } catch (IOException e) {
             e.printStackTrace();
             System.out.println("Error saving post: " + e.getMessage());
+        }
+    }
+
+    // ------------------- Send Notifications to Matching Blood Group Donors -------------------
+
+    private void sendNotificationsToDonors(String bloodGroup, String posterName, String posterEmail,
+                                           String posterPassword, String posterProfilePic) {
+        try {
+            Gson gson = new Gson();
+
+            // Read all users from UserDetails.json
+            File userFile = new File(userFilePath);
+            if (!userFile.exists()) {
+                System.out.println("ERROR: UserDetails.json file not found at: " + userFilePath);
+                return;
+            }
+
+            Reader userReader = new FileReader(userFile);
+            Type userListType = new TypeToken<List<User>>(){}.getType();
+            List<User> allUsers = gson.fromJson(userReader, userListType);
+            userReader.close();
+
+            System.out.println("Total users found in UserDetails.json: " + allUsers.size());
+
+            // Find users with matching blood group
+            List<User> matchingDonors = new ArrayList<>();
+            for (User user : allUsers) {
+                if (user.getBloodGroup() != null && user.getBloodGroup().equals(bloodGroup)) {
+                    // Don't send notification to the poster themselves
+                    if (!user.getEmail().equals(posterEmail)) {
+                        matchingDonors.add(user);
+                    }
+                }
+            }
+
+            if (matchingDonors.isEmpty()) {
+                System.out.println("No other donors found with blood group: " + bloodGroup);
+                return;
+            }
+
+            System.out.println("Found " + matchingDonors.size() + " donors with blood group: " + bloodGroup);
+
+            // Read existing notifications
+            File notiFile = new File(notiFilePath);
+            List<NotificationDetails> notifications = new ArrayList<>();
+
+            if (notiFile.exists() && notiFile.length() > 0) {
+                Reader notiReader = new FileReader(notiFile);
+                Type notiListType = new TypeToken<List<NotificationDetails>>(){}.getType();
+                List<NotificationDetails> existingNotis = gson.fromJson(notiReader, notiListType);
+                notiReader.close();
+                if (existingNotis != null) {
+                    notifications = existingNotis;
+                }
+            }
+
+            // Create notification for each matching donor
+            int notificationCount = 0;
+            for (User donor : matchingDonors) {
+                NotificationDetails notification = new NotificationDetails(
+                        posterName,                          // clickerName (person who posted)
+                        bloodGroup,                          // clickerBloodgroup (needed blood group)
+                        "N/A",                               // clickerDistrict
+                        "N/A",                               // clickerNumber
+                        posterEmail,                         // clickerEmail
+                        posterPassword,                      // clickerPassword
+                        posterProfilePic,                    // clickerProfilePic
+                        donor.getEmail(),                    // receiverEmail
+                        donor.getPassword(),                 // receiverPassword
+                        "request"                            // notiType
+                );
+
+                notifications.add(notification);
+                notificationCount++;
+            }
+
+            // Save all notifications
+            try (Writer writer = new FileWriter(notiFilePath)) {
+                gson.toJson(notifications, writer);
+                System.out.println("SUCCESS: Sent " + notificationCount + " notifications to " + bloodGroup + " donors");
+                System.out.println("Notifications saved to: " + notiFilePath);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("Error sending notifications: " + e.getMessage());
         }
     }
 
@@ -226,9 +309,7 @@ public class CreatePost_Controller implements Initializable {
                 return;
             }
 
-
-
-            // Get current user's name
+            // Get current user's info
             String currentUserName = "Anonymous";
             String currentUserEmail = "N/A";
             String currentUserPassword = "N/A";
@@ -264,12 +345,16 @@ public class CreatePost_Controller implements Initializable {
 
             System.out.println("Creating post by: " + currentUserName);
 
+            // Save the post
             savePostToJson(post);
+
+            // Send notifications to all users with matching blood group
+            sendNotificationsToDonors(blood, currentUserName, currentUserEmail, currentUserPassword, currentUserProfilePic);
 
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle("Success");
             alert.setHeaderText("Post Created!");
-            alert.setContentText("Your blood donation request has been posted to the newsfeed.");
+            alert.setContentText("Your blood donation request has been posted. Notifications sent to all " + blood + " donors.");
             alert.showAndWait();
 
             clearForm();
@@ -303,15 +388,11 @@ public class CreatePost_Controller implements Initializable {
     // ================= VALIDATION HELPERS =================
     private boolean isValidName(String name) {
         if (name == null) return false;
-
-        // Trim leading/trailing spaces
         name = name.trim();
-
-        // Regex: Only letters and single spaces between words, 3-50 chars
         String regex = "^[A-Za-z]+( [A-Za-z]+)*$";
-
         return name.matches(regex) && name.length() >= 3 && name.length() <= 50;
     }
+
     private boolean isValidUnit(String unit) {
         if (unit == null || unit.isEmpty()) return false;
         try {
@@ -321,30 +402,26 @@ public class CreatePost_Controller implements Initializable {
             return false;
         }
     }
+
     private boolean isValidLocation(String loc) {
         return loc != null && loc.length() >= 3;
     }
+
     private boolean isValidDate(DatePicker datePicker) {
         if (datePicker.getValue() == null) return false;
         return !datePicker.getValue().isBefore(java.time.LocalDate.now());
     }
+
     private boolean isValidNotes(String notes) {
         return notes.length() <= 200;
     }
+
     private boolean isValidPhone(String phone) {
         if (phone == null) return false;
-
-        // Remove leading/trailing spaces
         phone = phone.trim();
-
-        // Bangladesh mobile number format: 01XXXXXXXXX (11 digits)
         String regex = "^01[3-9]\\d{8}$";
-
         return phone.matches(regex);
     }
-
-
-
 
     private void showAlert(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
@@ -354,11 +431,9 @@ public class CreatePost_Controller implements Initializable {
         alert.showAndWait();
     }
 
-
     @FXML
     void logout_c(ActionEvent event) throws Exception {
         chkLogin.setlogout();
-
         Parent root = FXMLLoader.load(getClass().getResource("Dashboard.fxml"));
         Stage stage = (Stage) btnLogOut.getScene().getWindow();
         stage.setScene(new Scene(root));
